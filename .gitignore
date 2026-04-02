@@ -1,0 +1,13 @@
+# Node dependencies
+node_modules/
+blockchain/lib/
+
+# Foundry/Solidity
+blockchain/out/
+blockchain/cache/
+frontend/.next/
+frontend/out/
+
+#Environment Variables
+.env
+.env.local
