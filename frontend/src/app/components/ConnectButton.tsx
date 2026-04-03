@@ -16,12 +16,23 @@ export default function ConnectButton() {
   if (!mounted) return null;
 
   if (isConnected) {
+    const did = `did:dtp:${address?.slice(2)}`;
     return (
       <button 
-        onClick={() => disconnect()}
-        className="bg-slate-800 hover:bg-slate-700 text-white font-mono py-3 px-6 rounded-lg shadow-lg transform hover:scale-105 transition"
+        onClick={() => {
+          const did = `did:dtp:${address?.slice(2)}`;
+          navigator.clipboard.writeText(did);
+          // Optional: use a toast instead of alert for better UI
+        }}
+        onDoubleClick={() => disconnect()}
+        className="bg-slate-800 hover:bg-slate-700 text-white font-mono py-3 px-6 rounded-lg shadow-lg transform hover:scale-105 transition group relative"
+        title="Click to copy DID"
       >
-        {address?.slice(0, 6)}...{address?.slice(-4)}
+        <span className="opacity-70 text-xs block mb-1">Your DID</span>
+        {did.slice(0, 12)}...{did.slice(-4)}
+        <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 bg-black text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+          Click to copy / Double click to disconnect
+        </div>
       </button>
     );
   }
