@@ -37,16 +37,27 @@ export default function ConnectButton() {
     );
   }
 
-  const handleConnect = () => {
-    console.log("Connect button clicked, available connectors:", connectors);
-    const connector = connectors.find((c) => c.id === 'metaMask') || 
-                      connectors.find((c) => c.id === 'injected') || 
-                      connectors[0];
-    if (connector) {
-      connect({ connector });
-    } else {
-      console.error("No connector found");
-      alert("No wallet connector found. Please install MetaMask.");
+  const handleConnect = async () => {
+    console.log("Attempting connection. Available connectors:", connectors);
+    
+    if (connectors.length === 0) {
+      alert("No wallet connectors detected. Please ensure MetaMask is installed.");
+      return;
+    }
+
+    try {
+      // Try each connector until one works
+      for (const connector of connectors) {
+        console.log(`Trying connector: ${connector.name} (${connector.id})`);
+        try {
+          await connect({ connector });
+          return; // Success!
+        } catch (e) {
+          console.error(`Failed to connect with ${connector.name}:`, e);
+        }
+      }
+    } catch (err) {
+      console.error("Connection process error:", err);
     }
   };
 

@@ -8,9 +8,9 @@ import { ReactNode, useState } from 'react';
 // We define our "Localhost" chain specifically for Anvil
 const config = createConfig({
   chains: [localhost, mainnet],
+  ssr: true,
   connectors: [
     injected(),
-    metaMask(),
   ],
   transports: {
     [localhost.id]: http('http://127.0.0.1:8545'),
