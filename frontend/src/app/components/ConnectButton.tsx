@@ -4,7 +4,7 @@ import { injected } from 'wagmi/connectors';
 
 export default function ConnectButton() {
   const { address, isConnected } = useAccount();
-  const { connect } = useConnect();
+  const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
 
   if (isConnected) {
@@ -20,7 +20,14 @@ export default function ConnectButton() {
 
   return (
     <button 
-      onClick={() => connect({ connector: injected() })}
+      onClick={() => {
+        const connector = connectors[0];
+        if (connector) {
+          connect({ connector });
+        } else {
+          alert("No wallet connector found. Please install MetaMask.");
+        }
+      }}
       className="bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transform hover:scale-105 transition"
     >
       Connect to TrustChain Portal
