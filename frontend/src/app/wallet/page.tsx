@@ -18,7 +18,7 @@ export default function WalletDashboard() {
       <main className="max-w-4xl mx-auto px-6 py-12">
         <div className="mb-12">
           <h1 className="text-4xl font-semibold tracking-tight mb-3">Your Credentials</h1>
-          <p className="text-[#86868b] text-lg font-medium">Manage and secure your life's critical documents. Entirely on-device.</p>
+          <p className="text-[#86868b] text-lg font-medium">Manage and secure your life&apos;s critical documents. Entirely on-device.</p>
         </div>
 
         <div className="grid md:grid-cols-2 gap-8">
