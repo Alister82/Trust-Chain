@@ -28,7 +28,9 @@ export default function ConnectButton() {
 
   const handleConnect = () => {
     console.log("Connect button clicked, available connectors:", connectors);
-    const connector = connectors.find((c) => c.id === 'injected') || connectors[0];
+    const connector = connectors.find((c) => c.id === 'metaMask') || 
+                      connectors.find((c) => c.id === 'injected') || 
+                      connectors[0];
     if (connector) {
       connect({ connector });
     } else {

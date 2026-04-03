@@ -2,13 +2,16 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider, createConfig, http } from 'wagmi';
 import { mainnet, localhost } from 'wagmi/chains';
-import { injected } from 'wagmi/connectors';
+import { injected, metaMask } from 'wagmi/connectors';
 import { ReactNode, useState } from 'react';
 
 // We define our "Localhost" chain specifically for Anvil
 const config = createConfig({
   chains: [localhost, mainnet],
-  connectors: [injected()],
+  connectors: [
+    injected(),
+    metaMask(),
+  ],
   transports: {
     [localhost.id]: http('http://127.0.0.1:8545'),
     [mainnet.id]: http(),
