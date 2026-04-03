@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Wallet, Landmark, Building2, ShieldCheck, ChevronRight } from "lucide-react";
+import ConnectButton from "./components/ConnectButton";
 
 export default function Home() {
   return (
@@ -11,9 +12,13 @@ export default function Home() {
         <h1 className="text-5xl md:text-7xl font-semibold tracking-tight text-black dark:text-white mb-6 text-center">
           Trust, reimagined.
         </h1>
-        <p className="text-xl md:text-2xl text-[#86868b] max-w-3xl text-center mb-16 leading-relaxed font-medium">
+        <p className="text-xl md:text-2xl text-[#86868b] max-w-3xl text-center mb-10 leading-relaxed font-medium">
           The next-generation digital identity protocol. Experience zero-knowledge verification, absolute privacy, and instant cryptographic trust.
         </p>
+
+        <div className="mb-16">
+          <ConnectButton />
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
           <Card 

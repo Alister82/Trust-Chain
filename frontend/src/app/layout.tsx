@@ -1,22 +1,16 @@
+
+// frontend/src/app/layout.tsx
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from "../components/ThemeProvider";
-import { TopNav } from "../components/TopNav";
+// 1. Import your new Providers component
+import { Providers } from "./Providers";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Decentralized Trust Protocol",
-  description: "Identity layer for the web",
+  title: "TrustChain - Decentralized Identity",
+  description: "A secure, blockchain-backed notary system.",
 };
 
 export default function RootLayout({
@@ -25,16 +19,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <TopNav />
+    <html lang="en">
+      <body className={inter.className}>
+        {/* 2. Wrap the children inside Providers */}
+        <Providers>
           {children}
-        </ThemeProvider>
+        </Providers>
       </body>
     </html>
   );
