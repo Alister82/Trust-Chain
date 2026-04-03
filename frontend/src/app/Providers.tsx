@@ -1,25 +1,41 @@
 'use client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider, createConfig, http } from 'wagmi';
-import { mainnet, localhost } from 'wagmi/chains';
-import { injected, metaMask } from 'wagmi/connectors';
-import { ReactNode, useState } from 'react';
+import { mainnet } from 'wagmi/chains'; // Remove localhost import
+import { ReactNode, useState, useEffect } from 'react';
+import { injected } from 'wagmi/connectors';
 
-// We define our "Localhost" chain specifically for Anvil
-const config = createConfig({
-  chains: [localhost, mainnet],
-  ssr: true,
-  connectors: [
-    injected(),
-  ],
+// 1. Explicitly define Anvil so the Provider knows exactly what to look for
+const anvil = {
+  id: 31337,
+  name: 'Anvil',
+  nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+  rpcUrls: {
+    default: { http: ['http://127.0.0.1:8545'] },
+  },
+} as const;
+
+export const config = createConfig({
+  chains: [anvil, mainnet],
+  ssr: true, // Keep this true for Next.js
+  connectors: [injected()],
   transports: {
-    [localhost.id]: http('http://127.0.0.1:8545'),
+    [anvil.id]: http(),
     [mainnet.id]: http(),
   },
 });
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
+  const [mounted, setMounted] = useState(false);
+
+  // 2. Fix the "Hydration" Error: 
+  // This ensures the blockchain logic only runs after the browser is ready
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null; 
 
   return (
     <WagmiProvider config={config}>
