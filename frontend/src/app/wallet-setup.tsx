@@ -1,13 +1,13 @@
-'use client';
+﻿'use client';
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-export default function WalletPage() {
+export default function WalletSetupPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/dashboard/citizen');
+    router.replace('/');
   }, [router]);
 
   return null;

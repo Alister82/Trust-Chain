@@ -3,11 +3,11 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-export default function WalletPage() {
+export default function SelectionPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/dashboard/citizen');
+    router.replace('/');
   }, [router]);
 
   return null;

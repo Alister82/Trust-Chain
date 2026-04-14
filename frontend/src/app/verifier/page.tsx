@@ -3,11 +3,11 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-export default function WalletPage() {
+export default function VerifierPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/dashboard/citizen');
+    router.replace('/dashboard/verifier');
   }, [router]);
 
   return null;
