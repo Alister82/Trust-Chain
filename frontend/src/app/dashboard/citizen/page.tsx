@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { useAuth } from '../../components/AuthContext';
 import { hashPdfToBytes32, useTrustRegistryActions, useTrustRegistryReads, useCitizenRequests } from '../../lib/trustRegistry';
 import { pinFileToIPFS, getIPFSUrl } from '../../lib/pinata';
-import { ExternalLink, Clock, CheckCircle2, XCircle, FileText } from 'lucide-react';
+import { ExternalLink, Clock, CheckCircle2, XCircle, FileText, Lock, Camera, CameraOff } from 'lucide-react';
+import { generateAESKey, encryptFile, encryptAESKeyAsymmetric, decryptAESKeyAsymmetric, decryptFile, getPublicKeyForAddress, getOrCreateKeyPair, uint8ToBase64, base64ToUint8 } from '../../lib/cryptoUtils';
 
 export default function CitizenDashboardPage() {
     return (
@@ -17,7 +18,7 @@ export default function CitizenDashboardPage() {
 
 function CitizenDashboard() {
     const { address, disconnectWallet } = useAuth();
-    const { requestVerification, publicClient } = useTrustRegistryActions();
+    const { requestVerification, updateDocumentCID, publicClient } = useTrustRegistryActions();
     const { issuers } = useTrustRegistryReads();
     const { requests, isLoading: isLoadingRequests, refetch: refetchRequests } = useCitizenRequests(address);
     
@@ -28,6 +29,39 @@ function CitizenDashboard() {
     const [fileName, setFileName] = useState('');
     const [status, setStatus] = useState('');
     const [busy, setBusy] = useState(false);
+    
+    // KYC Photo
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const [stream, setStream] = useState<MediaStream | null>(null);
+    const [livePhotoBlob, setLivePhotoBlob] = useState<Blob | null>(null);
+
+    const startCamera = async () => {
+        try {
+            const str = await navigator.mediaDevices.getUserMedia({ video: true });
+            setStream(str);
+            if (videoRef.current) videoRef.current.srcObject = str;
+        } catch (e) {
+            alert("Camera access denied or unavailable.");
+            console.error(e);
+        }
+    };
+
+    const takePhoto = () => {
+        if (!videoRef.current || !canvasRef.current) return;
+        const context = canvasRef.current.getContext('2d');
+        canvasRef.current.width = videoRef.current.videoWidth;
+        canvasRef.current.height = videoRef.current.videoHeight;
+        context?.drawImage(videoRef.current, 0, 0);
+        canvasRef.current.toBlob((blob) => setLivePhotoBlob(blob), 'image/jpeg');
+        stream?.getTracks().forEach(track => track.stop());
+        setStream(null);
+    };
+
+    const stopCamera = () => {
+        stream?.getTracks().forEach(track => track.stop());
+        setStream(null);
+    };
 
     const shortAddress = useMemo(() => (address ? `${address.slice(0, 6)}...${address.slice(-4)}` : ''), [address]);
 
@@ -52,17 +86,44 @@ function CitizenDashboard() {
     };
 
     const submitVerification = async () => {
-        if (!documentHash || !selectedIssuer || !selectedFile) {
-            setStatus('Select a PDF and an issuer first.');
+        if (!documentHash || !selectedIssuer || !selectedFile || !livePhotoBlob) {
+            setStatus('Select a PDF, an issuer, and take a Live Photo first.');
             return;
         }
         try {
             setBusy(true);
-            setStatus('Step 1/2: Uploading document to IPFS (Pinata)...');
-            const pinRes = await pinFileToIPFS(selectedFile);
+            setStatus('Step 1/3: Encrypting file and photo locally...');
+            
+            // Envelope Encryption
+            const citizenKeys = await getOrCreateKeyPair(address!, 'citizen');
+            const issuerPubKey = await getPublicKeyForAddress(selectedIssuer);
+            const aesKey = await generateAESKey();
+            
+            // Encrypt both PDF and Photo with the same AES key
+            const encryptedFile = await encryptFile(selectedFile, aesKey);
+            const encryptedPhoto = await encryptFile(livePhotoBlob, aesKey);
+            
+            const citizenEncAES = await encryptAESKeyAsymmetric(aesKey, citizenKeys.publicKey);
+            const issuerEncAES = await encryptAESKeyAsymmetric(aesKey, issuerPubKey);
+
+            const payload = {
+                metadata: { filename: fileName, type: selectedFile.type },
+                encryptedFile: uint8ToBase64(encryptedFile),
+                encryptedPhoto: uint8ToBase64(encryptedPhoto),
+                keys: {
+                    [address!.toLowerCase()]: uint8ToBase64(citizenEncAES),
+                    [selectedIssuer.toLowerCase()]: uint8ToBase64(issuerEncAES)
+                }
+            };
+
+            const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+            const jsonFile = new File([blob], 'encrypted_bundle.json', { type: 'application/json' });
+
+            setStatus('Step 2/3: Uploading encrypted bundle to IPFS (Pinata)...');
+            const pinRes = await pinFileToIPFS(jsonFile);
             const ipfsCid = pinRes.IpfsHash;
 
-            setStatus('Step 2/2: Submitting transaction on-chain...');
+            setStatus('Step 3/3: Submitting transaction on-chain...');
             const hash = await requestVerification(selectedIssuer, documentHash, ipfsCid, documentType);
             
             setStatus('Waiting for block confirmation...');
@@ -74,12 +135,38 @@ function CitizenDashboard() {
             setSelectedFile(null);
             setFileName('');
             setDocumentHash('');
+            setLivePhotoBlob(null);
             setTimeout(() => {
                 refetchRequests();
                 setStatus('');
             }, 2000);
         } catch (e: any) {
             setStatus(e?.shortMessage || e?.message || 'Transaction failed');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const handleViewDecrypted = async (req: any) => {
+        try {
+            setBusy(true);
+            setStatus('Fetching and decrypting document...');
+            const res = await fetch(getIPFSUrl(req.ipfsHash));
+            const data = await res.json();
+            
+            const citizenKeys = await getOrCreateKeyPair(address!, 'citizen');
+            const myEncAESB64 = data.keys[address!.toLowerCase()];
+            if (!myEncAESB64) throw new Error("No key found for you in this bundle");
+            
+            const aesKey = await decryptAESKeyAsymmetric(base64ToUint8(myEncAESB64), citizenKeys.privateKey);
+            const blob = await decryptFile(base64ToUint8(data.encryptedFile), aesKey);
+            
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            setStatus('');
+        } catch (e: any) {
+            console.error(e);
+            setStatus('Failed to decrypt document. ' + (e.message || ''));
         } finally {
             setBusy(false);
         }
@@ -136,6 +223,56 @@ function CitizenDashboard() {
                                 <span className="text-[10px] text-blue-400 font-bold uppercase">Ready</span>
                             </div>
                         )}
+                        
+                        {/* Live Photo Section */}
+                        <div className="space-y-4 pt-4 border-t border-white/10">
+                            <div className="flex justify-between items-center">
+                                <label className="block text-[10px] font-bold uppercase tracking-widest text-white/40">Live Photo KYC</label>
+                                {stream ? (
+                                    <button onClick={stopCamera} className="text-[10px] flex items-center space-x-1 text-red-400 hover:text-red-300 transition-colors uppercase font-bold">
+                                        <CameraOff className="w-3 h-3" /> <span>Cancel</span>
+                                    </button>
+                                ) : !livePhotoBlob && (
+                                    <button onClick={startCamera} className="text-[10px] flex items-center space-x-1 text-blue-400 hover:text-blue-300 transition-colors uppercase font-bold">
+                                        <Camera className="w-3 h-3" /> <span>Capture Photo</span>
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="relative rounded-2xl overflow-hidden bg-black border border-white/10 aspect-video flex items-center justify-center">
+                                {stream ? (
+                                    <>
+                                        <video 
+                                            ref={(video) => {
+                                                if (video) {
+                                                    videoRef.current = video;
+                                                    if (stream) {
+                                                        video.srcObject = stream;
+                                                    }
+                                                }
+                                            }} 
+                                            autoPlay 
+                                            playsInline 
+                                            className="absolute inset-0 w-full h-full object-cover border-none" 
+                                        />
+                                        <button onClick={takePhoto} className="absolute bottom-4 bg-white text-black px-4 py-2 rounded-xl text-xs font-bold shadow-lg hover:scale-105 transition-all">SNAP</button>
+                                    </>
+                                ) : livePhotoBlob ? (
+                                    <div className="relative w-full h-full flex flex-col items-center justify-center space-y-3">
+                                        <img src={URL.createObjectURL(livePhotoBlob)} className="absolute inset-0 w-full h-full object-cover opacity-50" />
+                                        <CheckCircle2 className="w-10 h-10 text-green-400 z-10" />
+                                        <br/>
+                                        <button onClick={startCamera} className="z-10 px-4 py-2 rounded-xl bg-white/10 backdrop-blur text-xs font-bold text-white hover:bg-white/20 transition-colors border border-white/20">Retake</button>
+                                    </div>
+                                ) : (
+                                    <div className="text-white/20 flex flex-col items-center space-y-2">
+                                        <Camera className="w-8 h-8" />
+                                        <span className="text-[10px] font-bold uppercase tracking-widest">Camera Inactive</span>
+                                    </div>
+                                )}
+                                <canvas ref={canvasRef} className="hidden" />
+                            </div>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
@@ -183,7 +320,7 @@ function CitizenDashboard() {
 
                     <div className="pt-6">
                         <button 
-                            disabled={busy || !documentHash || !selectedIssuer} 
+                            disabled={busy || !documentHash || !selectedIssuer || !livePhotoBlob} 
                             onClick={submitVerification} 
                             className="w-full px-6 py-4 rounded-2xl bg-white text-black font-bold text-sm tracking-[0.2em] uppercase hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-20 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
                         >
@@ -239,15 +376,13 @@ function CitizenDashboard() {
                                                         </span>
                                                     </td>
                                                     <td className="px-6 py-5">
-                                                        <a 
-                                                            href={getIPFSUrl(req.ipfsHash)} 
-                                                            target="_blank" 
-                                                            rel="noopener noreferrer"
+                                                        <button 
+                                                            onClick={() => handleViewDecrypted(req)}
                                                             className="inline-flex items-center space-x-2 text-xs font-medium text-blue-400 hover:text-blue-300 transition-all border-b border-blue-400/20"
                                                         >
-                                                            <span>View IPFS</span>
+                                                            <span>Decrypt & View</span>
                                                             <ExternalLink className="w-3 h-3" />
-                                                        </a>
+                                                        </button>
                                                     </td>
                                                     <td className="px-6 py-5">
                                                         <span className="text-xs text-white/40 font-medium">

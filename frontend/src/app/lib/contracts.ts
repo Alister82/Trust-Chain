@@ -86,6 +86,19 @@ export const TRUST_REGISTRY_ABI = [
     "inputs": [
       {
         "indexed": true,
+        "internalType": "address",
+        "name": "applicant",
+        "type": "address"
+      }
+    ],
+    "name": "IssuerRejected",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
         "internalType": "uint256",
         "name": "requestId",
         "type": "uint256"
@@ -164,6 +177,19 @@ export const TRUST_REGISTRY_ABI = [
     "type": "event"
   },
   {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "applicant",
+        "type": "address"
+      }
+    ],
+    "name": "VerifierRejected",
+    "type": "event"
+  },
+  {
     "inputs": [],
     "name": "admin",
     "outputs": [
@@ -187,6 +213,11 @@ export const TRUST_REGISTRY_ABI = [
         "internalType": "address",
         "name": "citizenDid",
         "type": "address"
+      },
+      {
+        "internalType": "string",
+        "name": "newIPFSCID",
+        "type": "string"
       },
       {
         "internalType": "bytes",
@@ -656,6 +687,11 @@ export const TRUST_REGISTRY_ABI = [
         "internalType": "bool",
         "name": "exists",
         "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "isRejected",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",
@@ -684,12 +720,38 @@ export const TRUST_REGISTRY_ABI = [
   {
     "inputs": [
       {
+        "internalType": "address",
+        "name": "applicant",
+        "type": "address"
+      }
+    ],
+    "name": "rejectIssuer",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "uint256",
         "name": "requestId",
         "type": "uint256"
       }
     ],
     "name": "rejectRequest",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "applicant",
+        "type": "address"
+      }
+    ],
+    "name": "rejectVerifier",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -839,6 +901,11 @@ export const TRUST_REGISTRY_ABI = [
       {
         "internalType": "bool",
         "name": "exists",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "isRejected",
         "type": "bool"
       }
     ],

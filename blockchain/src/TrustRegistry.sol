@@ -19,12 +19,14 @@ contract TrustRegistry {
         string name;
         bool isApproved;
         bool exists;
+        bool isRejected;
     }
 
     struct Verifier {
         string name;
         bool isApproved;
         bool exists;
+        bool isRejected;
     }
 
     struct VerificationRequest {
@@ -62,12 +64,16 @@ contract TrustRegistry {
     address[] private issuerApplications;
     address[] private verifierApplications;
     address[] private approvedIssuers;
+    mapping(address => bool) private issuerApplicationTracked;
+    mapping(address => bool) private verifierApplicationTracked;
 
     event CitizenRegistered(address indexed citizen);
     event IssuerApplied(address indexed applicant);
     event VerifierApplied(address indexed applicant);
     event IssuerApproved(address indexed issuer);
     event VerifierApproved(address indexed verifier);
+    event IssuerRejected(address indexed applicant);
+    event VerifierRejected(address indexed applicant);
     event VerificationRequested(uint256 indexed requestId, address indexed citizen, address indexed issuer, bytes32 documentHash, string ipfsHash, string documentType);
     event RequestRejected(uint256 indexed requestId);
     event DocumentAnchored(address indexed citizenDid, address indexed issuer, bytes32 documentHash, bytes signature);
@@ -103,9 +109,13 @@ contract TrustRegistry {
         require(users[msg.sender].role == Role.NONE, "Already registered");
         
         // Flat Assignment
-        issuers[msg.sender] = Issuer({name: _name, isApproved: false, exists: true});
+        issuers[msg.sender] = Issuer({name: _name, isApproved: false, exists: true, isRejected: false});
         users[msg.sender] = UserProfile({role: Role.ISSUER, isApproved: false, departmentName: _name});
-        issuerApplications.push(msg.sender);
+        // Only push once per address to avoid duplicates after reject+re-apply
+        if (!issuerApplicationTracked[msg.sender]) {
+            issuerApplications.push(msg.sender);
+            issuerApplicationTracked[msg.sender] = true;
+        }
         
         emit IssuerApplied(msg.sender);
     }
@@ -115,9 +125,13 @@ contract TrustRegistry {
         require(users[msg.sender].role == Role.NONE, "Already registered");
         
         // Flat Assignment
-        verifiers[msg.sender] = Verifier({name: _name, isApproved: false, exists: true});
+        verifiers[msg.sender] = Verifier({name: _name, isApproved: false, exists: true, isRejected: false});
         users[msg.sender] = UserProfile({role: Role.VERIFIER, isApproved: false, departmentName: _name});
-        verifierApplications.push(msg.sender);
+        // Only push once per address to avoid duplicates after reject+re-apply
+        if (!verifierApplicationTracked[msg.sender]) {
+            verifierApplications.push(msg.sender);
+            verifierApplicationTracked[msg.sender] = true;
+        }
         
         emit VerifierApplied(msg.sender);
     }
@@ -145,6 +159,24 @@ contract TrustRegistry {
         }
         isAuthorizedVerifier[applicant] = true;
         emit VerifierApproved(applicant);
+    }
+
+    function rejectIssuer(address applicant) external onlyAdmin {
+        require(issuers[applicant].exists, "Not issuer applicant");
+        require(!issuers[applicant].isApproved, "Already approved");
+        require(!issuers[applicant].isRejected, "Already rejected");
+        issuers[applicant].isRejected = true;
+        users[applicant].role = Role.NONE;
+        emit IssuerRejected(applicant);
+    }
+
+    function rejectVerifier(address applicant) external onlyAdmin {
+        require(verifiers[applicant].exists, "Not verifier applicant");
+        require(!verifiers[applicant].isApproved, "Already approved");
+        require(!verifiers[applicant].isRejected, "Already rejected");
+        verifiers[applicant].isRejected = true;
+        users[applicant].role = Role.NONE;
+        emit VerifierRejected(applicant);
     }
 
     function requestVerification(address issuer, bytes32 documentHash, string calldata ipfsHash, string calldata _documentType) external onlyApprovedCitizen returns (uint256 requestId) {
@@ -178,7 +210,7 @@ contract TrustRegistry {
         emit RequestRejected(requestId);
     }
 
-    function anchorDocument(bytes32 documentHash, address citizenDid, bytes calldata signature) external onlyApprovedIssuer {
+    function anchorDocument(bytes32 documentHash, address citizenDid, string calldata newIPFSCID, bytes calldata signature) external onlyApprovedIssuer {
         require(users[citizenDid].role == Role.CITIZEN, "Citizen not registered");
 
         bool matchedPendingRequest = false;
@@ -186,6 +218,7 @@ contract TrustRegistry {
             VerificationRequest storage req = verificationRequests[i];
             if (!req.isAnchored && req.issuer == msg.sender && req.citizen == citizenDid && req.documentHash == documentHash) {
                 req.isAnchored = true;
+                req.ipfsHash = newIPFSCID; // Sever Issuer Access instantly by replacing the IPFS link
                 matchedPendingRequest = true;
                 break;
             }
@@ -232,7 +265,8 @@ contract TrustRegistry {
     function getIssuerApplicationDetails() external view onlyAdmin returns (IssuerInfo[] memory) {
         uint256 count;
         for (uint256 i = 0; i < issuerApplications.length; i++) {
-            if (!users[issuerApplications[i]].isApproved) {
+            address addr = issuerApplications[i];
+            if (issuers[addr].exists && !issuers[addr].isApproved && !issuers[addr].isRejected) {
                 count++;
             }
         }
@@ -241,8 +275,8 @@ contract TrustRegistry {
         uint256 idx;
         for (uint256 i = 0; i < issuerApplications.length; i++) {
             address addr = issuerApplications[i];
-            if (!users[addr].isApproved) {
-                details[idx] = IssuerInfo(addr, users[addr].departmentName);
+            if (issuers[addr].exists && !issuers[addr].isApproved && !issuers[addr].isRejected) {
+                details[idx] = IssuerInfo(addr, issuers[addr].name);
                 idx++;
             }
         }
@@ -256,7 +290,8 @@ contract TrustRegistry {
     function getVerifierApplicationDetails() external view onlyAdmin returns (IssuerInfo[] memory) {
         uint256 count;
         for (uint256 i = 0; i < verifierApplications.length; i++) {
-            if (!users[verifierApplications[i]].isApproved) {
+            address addr = verifierApplications[i];
+            if (verifiers[addr].exists && !verifiers[addr].isApproved && !verifiers[addr].isRejected) {
                 count++;
             }
         }
@@ -265,8 +300,8 @@ contract TrustRegistry {
         uint256 idx;
         for (uint256 i = 0; i < verifierApplications.length; i++) {
             address addr = verifierApplications[i];
-            if (!users[addr].isApproved) {
-                details[idx] = IssuerInfo(addr, users[addr].departmentName);
+            if (verifiers[addr].exists && !verifiers[addr].isApproved && !verifiers[addr].isRejected) {
+                details[idx] = IssuerInfo(addr, verifiers[addr].name);
                 idx++;
             }
         }

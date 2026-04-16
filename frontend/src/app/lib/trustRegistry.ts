@@ -217,14 +217,28 @@ export function useTrustRegistryActions() {
                 functionName: 'approveVerifier',
                 args: [applicant],
             }),
-        anchorDocument: (documentHash: `0x${string}`, citizenDid: `0x${string}`, signature: `0x${string}`) =>
+        rejectIssuer: (applicant: `0x${string}`) =>
+            writeContractAsync({
+                address: TRUST_REGISTRY_ADDRESS,
+                abi: TRUST_REGISTRY_ABI,
+                functionName: 'rejectIssuer',
+                args: [applicant],
+            }),
+        rejectVerifier: (applicant: `0x${string}`) =>
+            writeContractAsync({
+                address: TRUST_REGISTRY_ADDRESS,
+                abi: TRUST_REGISTRY_ABI,
+                functionName: 'rejectVerifier',
+                args: [applicant],
+            }),
+        anchorDocument: (documentHash: `0x${string}`, citizenDid: `0x${string}`, newIPFSCID: string, signature: `0x${string}`) =>
             writeContractAsync({
                 address: TRUST_REGISTRY_ADDRESS,
                 abi: TRUST_REGISTRY_ABI,
                 functionName: 'anchorDocument',
-                args: [documentHash, citizenDid, signature],
+                args: [documentHash, citizenDid, newIPFSCID, signature],
             }),
-        signAndAnchor: async (documentHash: `0x${string}`, citizenDid: `0x${string}`) => {
+        signAndAnchor: async (documentHash: `0x${string}`, citizenDid: `0x${string}`, newIPFSCID: string) => {
             const signature = await signMessageAsync({
                 message: { raw: documentHash },
             });
@@ -232,7 +246,7 @@ export function useTrustRegistryActions() {
                 address: TRUST_REGISTRY_ADDRESS,
                 abi: TRUST_REGISTRY_ABI,
                 functionName: 'anchorDocument',
-                args: [documentHash, citizenDid, signature],
+                args: [documentHash, citizenDid, newIPFSCID, signature],
             });
         }
     };

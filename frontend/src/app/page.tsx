@@ -10,7 +10,7 @@ import { useTrustRegistryReads, useTrustRegistryAdmin } from "./lib/trustRegistr
 
 export default function Home() {
   const { address, isConnected, appRole, rawRole, isApproved, isLoadingRole, refreshRole } = useAuth();
-  const { registerCitizen, applyIssuer, applyVerifier, approveIssuer, approveVerifier, publicClient } = useTrustRegistryActions();
+  const { registerCitizen, applyIssuer, applyVerifier, approveIssuer, approveVerifier, rejectIssuer, rejectVerifier, publicClient } = useTrustRegistryActions();
   const { issuerApps: adminIssuerApps, verifierApps: adminVerifierApps, refetch: refetchAdminApps } = useTrustRegistryAdmin();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] = useState('');
@@ -70,6 +70,24 @@ export default function Home() {
       await loadApplications();
     } catch (e: any) {
       setStatus(e?.shortMessage || e?.message || 'Approval failed');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const runRejection = async (fn: () => Promise<`0x${string}`>, label: string) => {
+    try {
+      setIsSubmitting(true);
+      setStatus(`Submitting rejection for ${label}...`);
+      const hash = await fn();
+      setStatus(`Rejection transaction pending...`);
+      if (publicClient) {
+        await publicClient.waitForTransactionReceipt({ hash });
+      }
+      setStatus(`${label} rejected.`);
+      await loadApplications();
+    } catch (e: any) {
+      setStatus(e?.shortMessage || e?.message || 'Rejection failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -208,8 +226,8 @@ export default function Home() {
                     <p className="text-xs text-white/50">No pending issuer applications.</p>
                   ) : (
                     <div className="space-y-2">
-                      {adminIssuerApps.map((app) => (
-                        <div key={app.addr} className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
+                      {adminIssuerApps.map((app, i) => (
+                        <div key={`${app.addr}-${i}`} className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
                           <div className="flex flex-col">
                             <p className="text-xs text-white font-medium">{app.name || 'Unknown Department'}</p>
                             <p className="text-[10px] break-all text-white/40">{app.addr}</p>
@@ -220,6 +238,13 @@ export default function Home() {
                             className="px-3 py-1 rounded bg-white text-black text-xs font-semibold disabled:opacity-50"
                           >
                             Approve
+                          </button>
+                          <button
+                            disabled={isSubmitting}
+                            onClick={() => runRejection(() => rejectIssuer(app.addr), `issuer ${app.name}`)}
+                            className="px-3 py-1 rounded bg-red-600 text-white text-xs font-semibold hover:bg-red-500 disabled:opacity-50"
+                          >
+                            Reject
                           </button>
                         </div>
                       ))}
@@ -233,8 +258,8 @@ export default function Home() {
                     <p className="text-xs text-white/50">No pending verifier applications.</p>
                   ) : (
                     <div className="space-y-2">
-                      {adminVerifierApps.map((app) => (
-                        <div key={app.addr} className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
+                      {adminVerifierApps.map((app, i) => (
+                        <div key={`${app.addr}-${i}`} className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
                           <div className="flex flex-col">
                             <p className="text-xs text-white font-medium">{app.name || 'Unknown Organization'}</p>
                             <p className="text-[10px] break-all text-white/40">{app.addr}</p>
@@ -245,6 +270,13 @@ export default function Home() {
                             className="px-3 py-1 rounded bg-white text-black text-xs font-semibold disabled:opacity-50"
                           >
                             Approve
+                          </button>
+                          <button
+                            disabled={isSubmitting}
+                            onClick={() => runRejection(() => rejectVerifier(app.addr), `verifier ${app.name}`)}
+                            className="px-3 py-1 rounded bg-red-600 text-white text-xs font-semibold hover:bg-red-500 disabled:opacity-50"
+                          >
+                            Reject
                           </button>
                         </div>
                       ))}
